@@ -1,1 +1,25 @@
-{"type": "module"}
+{
+  "name": "database_sanitizer",
+  "version": "1.0.0",
+  "description": "This directory contains multiple formats of your database dump for different tools and use cases.",
+  "main": "create-custom-format-dump.js",
+  "scripts": {
+    "dbeaver-dump": "node create-custom-format-dump.js",
+    "postgres-dump": "node sanitize-postgres-dump.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Haris-Nasir/database_sanitizer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Haris-Nasir/database_sanitizer/issues"
+  },
+  "homepage": "https://github.com/Haris-Nasir/database_sanitizer#readme",
+  "type": "module",
+  "dependencies": {
+    "@faker-js/faker": "^10.0.0"
+  }
+}

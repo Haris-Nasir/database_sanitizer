@@ -1,6 +1,7 @@
 // create-custom-format-dump.js
 import { execSync } from "child_process";
 import fs from "fs";
+import { faker } from "@faker-js/faker";
 
 // Configuration matching your pg_dump command
 const config = {
@@ -9,20 +10,25 @@ const config = {
   username: "postgres",
   format: "c", // Custom (binary) format
   outputFile:
-    "/Users/macbookair/Desktop/replica/tstg-rds-for-haris-09-09-2025.sql",
+    "/Users/umarahsan/projects/tournated/db/output-file/tprod-rds-09-09-2025-sanitized.sql",
   schema: "public",
   database: "postgres",
   verbose: true,
 };
 
+// Emails to skip from anonymization
+const skipEmails = ["mail.waleed.saifi@gmail.com"];
+
 // Temporary files for sanitization process
-const tempCustomDump = "/Users/macbookair/Desktop/replica/temp_custom.dump";
-const tempPlainDump = "/Users/macbookair/Desktop/replica/temp_plain.sql";
+const tempCustomDump =
+  "/Users/umarahsan/projects/tournated/db/temp/temp_custom.dump";
+const tempPlainDump =
+  "/Users/umarahsan/projects/tournated/db/temp/temp_plain.sql";
 const finalSanitizedDump = config.outputFile;
 
 // Input file (original PostgreSQL custom dump)
 const inputDump =
-  "/Users/macbookair/Desktop/dev_db/tprod-rds-for-haris-09-09-2025.sql";
+  "/Users/umarahsan/projects/tournated/db/input-file/tprod-rds-for-haris-09-09-2025.sql";
 
 console.log("🔄 Processing custom format dump from input file...");
 
@@ -41,19 +47,25 @@ try {
   // Step 3: Sanitize the plain SQL
   console.log("🔒 Step 3: Sanitizing PII data...");
 
-  // Generate fake data functions
+  // Generate fake data using faker
+  function generateFakeName() {
+    return faker.person.firstName();
+  }
+
+  function generateFakeSurname() {
+    return faker.person.lastName();
+  }
+
   function generateFakeEmail() {
-    const domains = ["trnted.com"];
-    const randomName = Math.random().toString(36).substring(2, 10);
-    const domain = domains[Math.floor(Math.random() * domains.length)];
-    return `${randomName}@${domain}`;
+    // Generate unique email using Unix timestamp
+    const timestamp = Date.now();
+    const username = faker.internet.username();
+    const domain = faker.internet.domainName();
+    return `${username}.${timestamp}@${domain}`;
   }
 
   function generateFakePhone() {
-    const prefixes = ["+1"];
-    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-    const number = Math.floor(Math.random() * 9000000000) + 1000000000;
-    return `${prefix}${number}`;
+    return faker.phone.number();
   }
 
   function generateFakeDOB(originalDate) {
@@ -112,10 +124,13 @@ try {
   let content = fs.readFileSync(tempPlainDump, "utf-8");
   const lines = content.split("\n");
   let sanitizedLines = [];
+  let nameCount = 0;
+  let surnameCount = 0;
   let emailCount = 0;
   let phoneCount = 0;
   let dobCount = 0;
   let passwordCount = 0;
+  let otherFieldsCount = 0;
   let inUserTable = false;
 
   for (let line of lines) {
@@ -138,35 +153,101 @@ try {
       continue;
     }
 
+    // name, surname, email, password, phone, dob, city, street, role, avatar, reset_password, ipinId, duprId, teId, atpId, wtaId, fideId, ltsU10Id, pdlId, israel_national_id, national_fisher_id, no_fisher_id_doc, user_national_id, user_national_med, user_address, user_device_token, user_device_type, fcm_token, accessToken, userClubIdId, googleId, appleId, facebookId, oldEmail, middle_name, name_passport, middle_name_passport, surname_passport, wprUserId, idToken, stripeAccountId, stripe_private_key, wprPlayerId
+
     // If we're in the user table data, sanitize PII data
     if (inUserTable) {
       const originalLine = line;
       const parts = line.split("\t");
 
-      if (parts.length >= 10) {
-        // Column 3: email (index 3)
-        if (parts[3] && parts[3].includes("@") && parts[3] !== "\\N") {
+      if (parts.length >= 128) {
+        // Ensure we have enough columns (128 total columns based on actual database schema)
+
+        // Column 1: name - anonymize with faker
+        if (parts[1] && parts[1] !== "\\N") {
+          parts[1] = generateFakeName();
+          nameCount++;
+        }
+
+        // Column 2: surname - anonymize with faker
+        if (parts[2] && parts[2] !== "\\N") {
+          parts[2] = generateFakeSurname();
+          surnameCount++;
+        }
+
+        // Column 3: email - anonymize with faker
+        if (
+          parts[3] &&
+          parts[3].includes("@") &&
+          parts[3] !== "\\N" &&
+          !skipEmails.includes(parts[3])
+        ) {
           parts[3] = generateFakeEmail();
           emailCount++;
         }
 
-        // Column 5: password (index 5) - Replace all bcrypt hashes
+        // Column 5: password - keep existing logic (replace all bcrypt hashes)
         if (parts[5] && parts[5] !== "\\N" && parts[5].length > 10) {
           parts[5] =
             "$2b$10$yki1DJ1UPBML4xZkESX3I.waslVwXuTYfWM00C.AVl34im5zt3Rs2";
           passwordCount++;
         }
 
-        // Column 6: phone (index 6)
+        // Column 6: phone - anonymize with faker
         if (parts[6] && parts[6] !== "\\N" && parts[6].length > 3) {
           parts[6] = generateFakePhone();
           phoneCount++;
         }
 
-        // Column 8: dob (date of birth, index 8)
+        // Column 8: dob - keep existing logic
         if (parts[8] && parts[8] !== "\\N" && parts[8].includes("-")) {
           parts[8] = generateFakeDOB(parts[8]); // Pass original date
           dobCount++;
+        }
+
+        // Only nullify specific sensitive columns
+        const columnsToNullify = new Set([
+          19, // avatar
+          50, // reset_password
+          53, // ipinId
+          54, // duprId
+          55, // teId
+          56, // atpId
+          57, // wtaId
+          58, // fideId
+          59, // ltsU10Id
+          60, // pdlId
+          62, // israel_national_id
+          67, // national_fisher_id
+          68, // no_fisher_id_doc
+          70, // user_national_id
+          71, // user_national_med
+          72, // user_address
+          77, // user_device_token
+          78, // user_device_type
+          79, // fcm_token
+          80, // accessToken
+          90, // userClubIdId
+          91, // googleId
+          92, // appleId
+          93, // facebookId
+          96, // oldEmail
+          104, // middle_name
+          105, // name_passport
+          106, // middle_name_passport
+          107, // surname_passport
+          112, // wprUserId
+          114, // idToken
+          116, // stripeAccountId
+          118, // stripe_private_key
+          123, // wprPlayerId
+        ]);
+
+        for (let i = 0; i < parts.length; i++) {
+          if (columnsToNullify.has(i) && parts[i] && parts[i] !== "\\N") {
+            parts[i] = "\\N";
+            otherFieldsCount++;
+          }
         }
 
         line = parts.join("\t");
@@ -174,7 +255,7 @@ try {
 
       if (originalLine !== line) {
         console.log(
-          `📧 Emails: ${emailCount} | 🔐 Passwords: ${passwordCount} | 📞 Phones: ${phoneCount} | 📅 DOBs: ${dobCount}`
+          `👤 Names: ${nameCount} | 👤 Surnames: ${surnameCount} | 📧 Emails: ${emailCount} | 🔐 Passwords: ${passwordCount} | 📞 Phones: ${phoneCount} | 📅 DOBs: ${dobCount} | 🗂️ Sensitive fields: ${otherFieldsCount}`
         );
       }
     }
@@ -184,7 +265,7 @@ try {
 
   // Write sanitized plain SQL
   const sanitizedPlainFile =
-    "/Users/macbookair/Desktop/replica/temp_sanitized_plain.sql";
+    "/Users/umarahsan/projects/tournated/db/temp/temp_sanitized_plain.sql";
   fs.writeFileSync(sanitizedPlainFile, sanitizedLines.join("\n"));
 
   // Step 4: Convert sanitized plain SQL back to custom format
@@ -223,10 +304,13 @@ try {
   }
 
   console.log("\n🎉 Custom format dump created successfully!");
-  console.log(`📧 Emails sanitized: ${emailCount}`);
+  console.log(`👤 Names anonymized: ${nameCount}`);
+  console.log(`👤 Surnames anonymized: ${surnameCount}`);
+  console.log(`📧 Emails anonymized: ${emailCount}`);
   console.log(`🔐 Passwords sanitized: ${passwordCount}`);
-  console.log(`📞 Phone numbers sanitized: ${phoneCount}`);
-  console.log(`📅 Dates of birth sanitized: ${dobCount}`);
+  console.log(`📞 Phone numbers anonymized: ${phoneCount}`);
+  console.log(`📅 Dates of birth anonymized: ${dobCount}`);
+  console.log(`🗂️ Sensitive fields nullified: ${otherFieldsCount}`);
   console.log(`📝 Custom format dump saved to: ${finalSanitizedDump}`);
 
   // Verify the file format
