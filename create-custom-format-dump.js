@@ -48,20 +48,27 @@ try {
   console.log("🔒 Step 3: Sanitizing PII data...");
 
   // Generate fake data using faker
+  let userCounter = 1;
+
   function generateFakeName() {
-    return faker.person.firstName();
+    const firstName = "John";
+    return `${firstName}${userCounter}`;
   }
 
   function generateFakeSurname() {
-    return faker.person.lastName();
+    const lastName = "Doe";
+    return `${lastName}${userCounter}`;
   }
 
   function generateFakeEmail() {
-    // Generate unique email using Unix timestamp
-    const timestamp = Date.now();
-    const username = faker.internet.username();
-    const domain = faker.internet.domainName();
-    return `${username}.${timestamp}@${domain}`;
+    // Generate unique email using user counter for guaranteed uniqueness
+    const username = `john${userCounter}`;
+    const domain = "tournated.com";
+    return `${username}@${domain}`;
+  }
+
+  function incrementUserCounter() {
+    userCounter++;
   }
 
   function generateFakePhone() {
@@ -257,6 +264,9 @@ try {
         console.log(
           `👤 Names: ${nameCount} | 👤 Surnames: ${surnameCount} | 📧 Emails: ${emailCount} | 🔐 Passwords: ${passwordCount} | 📞 Phones: ${phoneCount} | 📅 DOBs: ${dobCount} | 🗂️ Sensitive fields: ${otherFieldsCount}`
         );
+
+        // Increment counter after processing all fake data for this user
+        incrementUserCounter();
       }
     }
 
