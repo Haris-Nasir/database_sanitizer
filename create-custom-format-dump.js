@@ -17,7 +17,16 @@ const config = {
 };
 
 // Emails to skip from anonymization
-const skipEmails = ["mail.waleed.saifi@gmail.com"];
+const skipEmails = [
+  "mail.waleed.saifi@gmail.com",
+  "hamzamalik@getnada.com",
+  "prodclient@getnada.com",
+  "prodclient3@getnada.com",
+  "hamzamalik1@getnada.com",
+  "test203@getnada.com",
+  "testinguser67@getnada.com",
+  "asad.ahmad@spadasoftinc.com",
+];
 
 // Temporary files for sanitization process
 const tempCustomDump =
@@ -138,6 +147,7 @@ try {
   let dobCount = 0;
   let passwordCount = 0;
   let otherFieldsCount = 0;
+  let skippedRecords = 0;
   let inUserTable = false;
 
   for (let line of lines) {
@@ -170,14 +180,26 @@ try {
       if (parts.length >= 128) {
         // Ensure we have enough columns (128 total columns based on actual database schema)
 
-        // Column 1: name - anonymize with faker
-        if (parts[1] && parts[1] !== "\\N") {
+        // Column 3: email - check if it should be skipped
+        const shouldSkipEmail =
+          parts[3] &&
+          parts[3].includes("@") &&
+          parts[3] !== "\\N" &&
+          skipEmails.includes(parts[3]);
+
+        // Track skipped records for reporting
+        if (shouldSkipEmail) {
+          skippedRecords++;
+        }
+
+        // Column 1: name - anonymize with faker (skip if email is skipped)
+        if (parts[1] && parts[1] !== "\\N" && !shouldSkipEmail) {
           parts[1] = generateFakeName();
           nameCount++;
         }
 
-        // Column 2: surname - anonymize with faker
-        if (parts[2] && parts[2] !== "\\N") {
+        // Column 2: surname - anonymize with faker (skip if email is skipped)
+        if (parts[2] && parts[2] !== "\\N" && !shouldSkipEmail) {
           parts[2] = generateFakeSurname();
           surnameCount++;
         }
@@ -262,7 +284,7 @@ try {
 
       if (originalLine !== line) {
         console.log(
-          `👤 Names: ${nameCount} | 👤 Surnames: ${surnameCount} | 📧 Emails: ${emailCount} | 🔐 Passwords: ${passwordCount} | 📞 Phones: ${phoneCount} | 📅 DOBs: ${dobCount} | 🗂️ Sensitive fields: ${otherFieldsCount}`
+          `👤 Names: ${nameCount} | 👤 Surnames: ${surnameCount} | 📧 Emails: ${emailCount} | 🔐 Passwords: ${passwordCount} | 📞 Phones: ${phoneCount} | 📅 DOBs: ${dobCount} | 🗂️ Sensitive fields: ${otherFieldsCount} | ⏭️ Skipped: ${skippedRecords}`
         );
 
         // Increment counter after processing all fake data for this user
@@ -321,6 +343,7 @@ try {
   console.log(`📞 Phone numbers anonymized: ${phoneCount}`);
   console.log(`📅 Dates of birth anonymized: ${dobCount}`);
   console.log(`🗂️ Sensitive fields nullified: ${otherFieldsCount}`);
+  console.log(`⏭️ Records preserved (email skip): ${skippedRecords}`);
   console.log(`📝 Custom format dump saved to: ${finalSanitizedDump}`);
 
   // Verify the file format

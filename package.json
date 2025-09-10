@@ -5,7 +5,9 @@
   "main": "create-custom-format-dump.js",
   "scripts": {
     "dbeaver-dump": "node create-custom-format-dump.js",
-    "postgres-dump": "node sanitize-postgres-dump.js"
+    "postgres-dump": "node sanitize-postgres-dump.js",
+    "db-migrate": "node db-dump-restore.js",
+    "anonymize": "node anonymize.js"
   },
   "repository": {
     "type": "git",
@@ -20,6 +22,7 @@
   "homepage": "https://github.com/Haris-Nasir/database_sanitizer#readme",
   "type": "module",
   "dependencies": {
-    "@faker-js/faker": "^10.0.0"
+    "@faker-js/faker": "^10.0.0",
+    "dotenv": "^16.3.1"
   }
 }

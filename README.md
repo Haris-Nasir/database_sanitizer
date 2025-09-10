@@ -84,6 +84,157 @@ The `dump_sanitized.sql` file contains:
 - `sanitize-postgres-dump.js` - Sanitizes PII in PostgreSQL dumps
 - `create-formats.js` - Creates multiple dump formats
 - `sanitize-multiple-formats.js` - Creates sanitized versions in all formats
+- `anonymize.js` - Standalone anonymization module
+- `db-dump-restore.js` - Migrates database from source to destination with automatic anonymization
+
+## 🗄️ Database Migration
+
+Use the `db-dump-restore.js` script to migrate databases between different PostgreSQL instances:
+
+### Setup
+
+1. **Install dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+2. **Create `.env` file** with your database credentials:
+
+   ```bash
+   # Source Database Configuration (where to dump from)
+   SOURCE_DB_HOST=localhost
+   SOURCE_DB_PORT=5432
+   SOURCE_DB_NAME=your_source_database
+   SOURCE_DB_USER=postgres
+   SOURCE_DB_PASSWORD=
+
+   # Destination Database Configuration (where to restore to)
+   # This can be a different server/host than the source
+   DEST_DB_HOST=your_destination_host
+   DEST_DB_PORT=5432
+   DEST_DB_NAME=your_destination_database
+   DEST_DB_USER=your_destination_username
+   DEST_DB_PASSWORD=your_destination_password
+
+   # Dump Configuration
+   DUMP_FORMAT=plain    # custom, plain/sql, csv, directory
+   COMPRESSION_LEVEL=9  # 0-9 for custom format (ignored for plain/csv)
+   TEMP_DUMP_PATH=/tmp/source_dump.sql
+   CLEANUP_TEMP_FILE=true
+   ```
+
+3. **Run the migration:**
+   ```bash
+   npm run db-migrate
+   ```
+
+### **Dump Format Options:**
+
+Choose the format that best fits your needs:
+
+| Format          | Description                   | Use Case                                              | Compatibility               |
+| --------------- | ----------------------------- | ----------------------------------------------------- | --------------------------- |
+| **`plain`**     | Human-readable SQL statements | ✅ **Universal** - Works with any SQL database        | MySQL, SQLite, Oracle, etc. |
+| **`csv`**       | Comma-separated values        | ✅ **Data Analysis** - Perfect for spreadsheets/tools | Excel, Python pandas, R     |
+| **`custom`**    | PostgreSQL binary format      | ⚡ **Fastest** - PostgreSQL optimized                 | PostgreSQL only             |
+| **`directory`** | Directory with separate files | 📁 **Flexible** - Good for large databases            | PostgreSQL only             |
+
+#### **Format Examples:**
+
+**Plain SQL Format (Recommended for universality):**
+
+```bash
+DUMP_FORMAT=plain
+TEMP_DUMP_PATH=/tmp/database_dump.sql
+```
+
+- ✅ Human-readable SQL statements
+- ✅ Compatible with any SQL database
+- ✅ Can be edited/viewed in any text editor
+- ✅ Perfect for version control
+
+**CSV Format (Recommended for data analysis):**
+
+```bash
+DUMP_FORMAT=csv
+TEMP_DUMP_PATH=/tmp/database_dump.sql  # Will create /tmp/database_dump_csv/
+```
+
+- ✅ Each table becomes a separate CSV file
+- ✅ Perfect for Excel, Google Sheets, Python pandas
+- ✅ Great for data analysis and reporting
+- ✅ Smaller file sizes for large datasets
+
+**Custom Format (Recommended for PostgreSQL-only):**
+
+```bash
+DUMP_FORMAT=custom
+COMPRESSION_LEVEL=9
+TEMP_DUMP_PATH=/tmp/database_dump.dump
+```
+
+- ⚡ Fastest backup/restore
+- 📦 Best compression
+- 🔒 PostgreSQL-specific optimizations
+
+### Features
+
+- ✅ **Universal Compatibility**: Plain SQL format works with any SQL database (MySQL, SQLite, Oracle, etc.)
+- ✅ **Data Analysis Ready**: CSV format perfect for Excel, Python pandas, and data analysis tools
+- ✅ **Automatic Anonymization**: Data is automatically anonymized during migration
+- ✅ **PII Protection**: Names, emails, phones, DOBs, and sensitive data are anonymized
+- ✅ **Smart Email Skipping**: Important accounts preserved based on email whitelist
+- ✅ **Secure**: Uses environment variables for credentials
+- ✅ **Flexible**: Supports plain SQL, CSV, custom, and directory dump formats
+- ✅ **Safe**: Automatically drops and recreates destination database
+- ✅ **Clean**: Automatically cleans public schema before restore to prevent conflicts
+- ✅ **Fresh Start**: Ensures destination database has clean schema every time
+- ✅ **Verbose**: Provides detailed progress logging
+- ✅ **Cross-Platform**: Plain SQL dumps can be used on any operating system
+
+## 🔒 Data Anonymization
+
+The migration process automatically anonymizes sensitive data:
+
+### **What Gets Anonymized:**
+
+- ✅ **Names & Surnames**: Converted to fake names (e.g., "John1", "Doe1")
+- ✅ **Email Addresses**: Converted to fake emails (e.g., "john1@tournated.com")
+- ✅ **Phone Numbers**: Generated using Faker library
+- ✅ **Dates of Birth**: Year preserved, month/day randomized
+- ✅ **Passwords**: All replaced with safe bcrypt hash
+- ✅ **Sensitive Fields**: Device tokens, API keys, addresses nullified
+
+### **What Gets Preserved:**
+
+- ✅ **Important Accounts**: Users with emails in the skip list keep real data
+- ✅ **Database Structure**: All tables, constraints, indexes preserved
+- ✅ **Relationships**: All foreign keys and data relationships maintained
+- ✅ **Data Volume**: Row counts and overall data structure preserved
+
+### **Email Skip List:**
+
+```javascript
+const skipEmails = [
+  "mail.waleed.saifi@gmail.com",
+  "hamzamalik@getnada.com",
+  "prodclient@getnada.com",
+  "prodclient3@getnada.com",
+  "hamzamalik1@getnada.com",
+  "test203@getnada.com",
+  "testinguser67@getnada.com",
+  "asad.ahmad@spadasoftinc.com",
+];
+```
+
+### **Anonymization Process:**
+
+1. **Dump Creation**: Database dump created in chosen format
+2. **Format Conversion**: Converted to plain SQL for processing
+3. **Data Anonymization**: PII data replaced with fake values
+4. **Schema Cleaning**: Destination database schema cleaned
+5. **Data Restore**: Anonymized data restored to destination
 
 ## 📝 Notes
 
@@ -92,4 +243,6 @@ The `dump_sanitized.sql` file contains:
 - JSON files contain up to 1000 records per table
 - Sanitized dumps are safe for development and testing
 - Original data structure and relationships are preserved
-
+- **Schema Cleaning**: Public schema is automatically dropped and recreated before restore
+- **Clean Restore**: Ensures no schema conflicts during migration
+- **Fresh Database**: Destination database gets a completely clean start each time
