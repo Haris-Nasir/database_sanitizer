@@ -10,7 +10,7 @@ const config = {
   username: "postgres",
   format: "c", // Custom (binary) format
   outputFile:
-    "/Users/umarahsan/projects/tournated/db/output-file/tprod-rds-09-09-2025-sanitized.sql",
+    "/Users/macbookair/Desktop/output_file/tprod-rds-10-09-2025-sanitized.sql",
   schema: "public",
   database: "postgres",
   verbose: true,
@@ -29,15 +29,13 @@ const skipEmails = [
 ];
 
 // Temporary files for sanitization process
-const tempCustomDump =
-  "/Users/umarahsan/projects/tournated/db/temp/temp_custom.dump";
-const tempPlainDump =
-  "/Users/umarahsan/projects/tournated/db/temp/temp_plain.sql";
+const tempCustomDump = "/Users/macbookair/Desktop/temp_file/temp_custom.dump";
+const tempPlainDump = "/Users/macbookair/Desktop/temp_file/temp_plain.sql";
 const finalSanitizedDump = config.outputFile;
 
 // Input file (original PostgreSQL custom dump)
 const inputDump =
-  "/Users/umarahsan/projects/tournated/db/input-file/tprod-rds-for-haris-09-09-2025.sql";
+  "/Users/macbookair/Desktop/input_file/tprod-rds-for-stg-10-09-2025.sql";
 
 console.log("🔄 Processing custom format dump from input file...");
 
@@ -49,7 +47,7 @@ try {
   // Step 2: Convert custom format to plain SQL for sanitization
   console.log("📝 Step 2: Converting to plain SQL for sanitization...");
   execSync(
-    `pg_restore --no-owner --no-privileges --no-tablespaces -f "${tempPlainDump}" "${tempCustomDump}"`,
+    `pg_restore --no-owner --no-privileges --no-tablespaces --no-security-labels --no-comments -f "${tempPlainDump}" "${tempCustomDump}"`,
     { stdio: "inherit" }
   );
 
@@ -57,7 +55,7 @@ try {
   console.log("🔒 Step 3: Sanitizing PII data...");
 
   // Generate fake data using faker
-  let userCounter = 1;
+  let userCounter = 0; // Start from 0, increment before use
 
   function generateFakeName() {
     const firstName = "John";
@@ -81,7 +79,10 @@ try {
   }
 
   function generateFakePhone() {
-    return faker.phone.number();
+    const prefixes = ["+1"];
+    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    const number = Math.floor(Math.random() * 9000000000) + 1000000000;
+    return `${prefix}${number}`;
   }
 
   function generateFakeDOB(originalDate) {
@@ -192,25 +193,36 @@ try {
           skippedRecords++;
         }
 
+        // Check if this user has any data that needs sanitization
+        const hasName = parts[1] && parts[1] !== "\\N";
+        const hasSurname = parts[2] && parts[2] !== "\\N";
+        const hasEmail =
+          parts[3] &&
+          parts[3].includes("@") &&
+          parts[3] !== "\\N" &&
+          !skipEmails.includes(parts[3]);
+
+        // Only increment counter once per user record if this user has data to sanitize and is not skipped
+        let shouldIncrementCounter = false;
+        if ((hasName || hasSurname || hasEmail) && !shouldSkipEmail) {
+          shouldIncrementCounter = true;
+          incrementUserCounter();
+        }
+
         // Column 1: name - anonymize with faker (skip if email is skipped)
-        if (parts[1] && parts[1] !== "\\N" && !shouldSkipEmail) {
+        if (hasName && !shouldSkipEmail) {
           parts[1] = generateFakeName();
           nameCount++;
         }
 
         // Column 2: surname - anonymize with faker (skip if email is skipped)
-        if (parts[2] && parts[2] !== "\\N" && !shouldSkipEmail) {
+        if (hasSurname && !shouldSkipEmail) {
           parts[2] = generateFakeSurname();
           surnameCount++;
         }
 
         // Column 3: email - anonymize with faker
-        if (
-          parts[3] &&
-          parts[3].includes("@") &&
-          parts[3] !== "\\N" &&
-          !skipEmails.includes(parts[3])
-        ) {
+        if (hasEmail) {
           parts[3] = generateFakeEmail();
           emailCount++;
         }
@@ -286,9 +298,6 @@ try {
         console.log(
           `👤 Names: ${nameCount} | 👤 Surnames: ${surnameCount} | 📧 Emails: ${emailCount} | 🔐 Passwords: ${passwordCount} | 📞 Phones: ${phoneCount} | 📅 DOBs: ${dobCount} | 🗂️ Sensitive fields: ${otherFieldsCount} | ⏭️ Skipped: ${skippedRecords}`
         );
-
-        // Increment counter after processing all fake data for this user
-        incrementUserCounter();
       }
     }
 
@@ -297,8 +306,126 @@ try {
 
   // Write sanitized plain SQL
   const sanitizedPlainFile =
-    "/Users/umarahsan/projects/tournated/db/temp/temp_sanitized_plain.sql";
+    "/Users/macbookair/Desktop/temp_file/temp_sanitized_plain.sql";
   fs.writeFileSync(sanitizedPlainFile, sanitizedLines.join("\n"));
+
+  // Additional cleanup: Remove any remaining ownership and privilege statements
+  console.log("🧹 Cleaning up ownership and privilege statements...");
+  let cleanedContent = fs.readFileSync(sanitizedPlainFile, "utf-8");
+
+  // Remove ownership and privilege related statements
+  const linesToRemove = [
+    /^ALTER.*OWNER TO.*;$/gm,
+    /^GRANT.*TO.*;$/gm,
+    /^REVOKE.*FROM.*;$/gm,
+    /^COMMENT ON.*IS.*;$/gm,
+    /^COMMENT ON SCHEMA.*IS.*;$/gm,
+    /^COMMENT ON TABLE.*IS.*;$/gm,
+    /^COMMENT ON COLUMN.*IS.*;$/gm,
+    /^COMMENT ON FUNCTION.*IS.*;$/gm,
+    /^COMMENT ON TYPE.*IS.*;$/gm,
+    /^COMMENT ON DOMAIN.*IS.*;$/gm,
+    /^COMMENT ON AGGREGATE.*IS.*;$/gm,
+    /^COMMENT ON OPERATOR.*IS.*;$/gm,
+    /^COMMENT ON CONSTRAINT.*IS.*;$/gm,
+    /^COMMENT ON INDEX.*IS.*;$/gm,
+    /^COMMENT ON RULE.*IS.*;$/gm,
+    /^COMMENT ON TRIGGER.*IS.*;$/gm,
+    /^COMMENT ON VIEW.*IS.*;$/gm,
+    /^COMMENT ON MATERIALIZED VIEW.*IS.*;$/gm,
+    /^COMMENT ON SEQUENCE.*IS.*;$/gm,
+    /^COMMENT ON DATABASE.*IS.*;$/gm,
+    /^COMMENT ON ROLE.*IS.*;$/gm,
+    /^COMMENT ON TABLESPACE.*IS.*;$/gm,
+    /^COMMENT ON CONVERSION.*IS.*;$/gm,
+    /^COMMENT ON LANGUAGE.*IS.*;$/gm,
+    /^COMMENT ON CAST.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH CONFIGURATION.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH DICTIONARY.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH PARSER.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH TEMPLATE.*IS.*;$/gm,
+    /^COMMENT ON FOREIGN DATA WRAPPER.*IS.*;$/gm,
+    /^COMMENT ON FOREIGN SERVER.*IS.*;$/gm,
+    /^COMMENT ON USER MAPPING.*IS.*;$/gm,
+    /^COMMENT ON EXTENSION.*IS.*;$/gm,
+    /^COMMENT ON EVENT TRIGGER.*IS.*;$/gm,
+    /^COMMENT ON POLICY.*IS.*;$/gm,
+    /^COMMENT ON PUBLICATION.*IS.*;$/gm,
+    /^COMMENT ON SUBSCRIPTION.*IS.*;$/gm,
+    /^COMMENT ON STATISTICS.*IS.*;$/gm,
+    /^COMMENT ON PROCEDURE.*IS.*;$/gm,
+    /^COMMENT ON ROUTINE.*IS.*;$/gm,
+    /^COMMENT ON TRANSFORM.*IS.*;$/gm,
+    /^COMMENT ON ACCESS METHOD.*IS.*;$/gm,
+    /^COMMENT ON TYPE ACCESS METHOD.*IS.*;$/gm,
+    /^COMMENT ON AMOP.*IS.*;$/gm,
+    /^COMMENT ON AMPROC.*IS.*;$/gm,
+    /^COMMENT ON OPERATOR CLASS.*IS.*;$/gm,
+    /^COMMENT ON OPERATOR FAMILY.*IS.*;$/gm,
+    /^COMMENT ON LARGE OBJECT.*IS.*;$/gm,
+    /^COMMENT ON COLLATION.*IS.*;$/gm,
+    /^COMMENT ON CONVERSION.*IS.*;$/gm,
+    /^COMMENT ON DEFAULT PRIVILEGES.*IS.*;$/gm,
+    /^COMMENT ON SCHEMA.*IS.*;$/gm,
+    /^COMMENT ON TABLE.*IS.*;$/gm,
+    /^COMMENT ON COLUMN.*IS.*;$/gm,
+    /^COMMENT ON FUNCTION.*IS.*;$/gm,
+    /^COMMENT ON TYPE.*IS.*;$/gm,
+    /^COMMENT ON DOMAIN.*IS.*;$/gm,
+    /^COMMENT ON AGGREGATE.*IS.*;$/gm,
+    /^COMMENT ON OPERATOR.*IS.*;$/gm,
+    /^COMMENT ON CONSTRAINT.*IS.*;$/gm,
+    /^COMMENT ON INDEX.*IS.*;$/gm,
+    /^COMMENT ON RULE.*IS.*;$/gm,
+    /^COMMENT ON TRIGGER.*IS.*;$/gm,
+    /^COMMENT ON VIEW.*IS.*;$/gm,
+    /^COMMENT ON MATERIALIZED VIEW.*IS.*;$/gm,
+    /^COMMENT ON SEQUENCE.*IS.*;$/gm,
+    /^COMMENT ON DATABASE.*IS.*;$/gm,
+    /^COMMENT ON ROLE.*IS.*;$/gm,
+    /^COMMENT ON TABLESPACE.*IS.*;$/gm,
+    /^COMMENT ON CONVERSION.*IS.*;$/gm,
+    /^COMMENT ON LANGUAGE.*IS.*;$/gm,
+    /^COMMENT ON CAST.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH CONFIGURATION.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH DICTIONARY.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH PARSER.*IS.*;$/gm,
+    /^COMMENT ON TEXT SEARCH TEMPLATE.*IS.*;$/gm,
+    /^COMMENT ON FOREIGN DATA WRAPPER.*IS.*;$/gm,
+    /^COMMENT ON FOREIGN SERVER.*IS.*;$/gm,
+    /^COMMENT ON USER MAPPING.*IS.*;$/gm,
+    /^COMMENT ON EXTENSION.*IS.*;$/gm,
+    /^COMMENT ON EVENT TRIGGER.*IS.*;$/gm,
+    /^COMMENT ON POLICY.*IS.*;$/gm,
+    /^COMMENT ON PUBLICATION.*IS.*;$/gm,
+    /^COMMENT ON SUBSCRIPTION.*IS.*;$/gm,
+    /^COMMENT ON STATISTICS.*IS.*;$/gm,
+    /^COMMENT ON PROCEDURE.*IS.*;$/gm,
+    /^COMMENT ON ROUTINE.*IS.*;$/gm,
+    /^COMMENT ON TRANSFORM.*IS.*;$/gm,
+    /^COMMENT ON ACCESS METHOD.*IS.*;$/gm,
+    /^COMMENT ON TYPE ACCESS METHOD.*IS.*;$/gm,
+    /^COMMENT ON AMOP.*IS.*;$/gm,
+    /^COMMENT ON AMPROC.*IS.*;$/gm,
+    /^COMMENT ON OPERATOR CLASS.*IS.*;$/gm,
+    /^COMMENT ON OPERATOR FAMILY.*IS.*;$/gm,
+    /^COMMENT ON LARGE OBJECT.*IS.*;$/gm,
+    /^COMMENT ON COLLATION.*IS.*;$/gm,
+    /^COMMENT ON CONVERSION.*IS.*;$/gm,
+    /^COMMENT ON DEFAULT PRIVILEGES.*IS.*;$/gm,
+  ];
+
+  linesToRemove.forEach((pattern) => {
+    cleanedContent = cleanedContent.replace(pattern, "");
+  });
+
+  // Remove empty lines that might have been left behind
+  cleanedContent = cleanedContent.replace(/^\s*$/gm, "");
+
+  // Write the cleaned content back
+  fs.writeFileSync(sanitizedPlainFile, cleanedContent);
 
   // Step 4: Convert sanitized plain SQL back to custom format
   console.log("📝 Step 4: Converting sanitized data to custom format...");
@@ -317,7 +444,7 @@ try {
 
   // Now create custom format dump from sanitized database
   execSync(
-    `pg_dump --format=custom --compress=9 --no-owner --no-privileges --file="${finalSanitizedDump}" --host=${config.host} --port=${config.port} --username=${config.username} ${tempDb} -n ${config.schema}`,
+    `pg_dump --format=custom --compress=9 --no-owner --no-privileges --no-tablespaces --no-security-labels --no-comments --file="${finalSanitizedDump}" --host=${config.host} --port=${config.port} --username=${config.username} ${tempDb} -n ${config.schema}`,
     { stdio: "inherit" }
   );
 
@@ -351,9 +478,13 @@ try {
   execSync(`file "${finalSanitizedDump}"`, { stdio: "inherit" });
 
   console.log("\n✅ File matches your pg_dump command format!");
-  console.log("\n🔧 To use with DBeaver:");
+  console.log("\n🔧 To restore the sanitized dump:");
   console.log(
-    `pg_restore -U postgres -d your_database "${finalSanitizedDump}"`
+    `pg_restore --no-owner --no-privileges --no-tablespaces -U postgres -d your_database "${finalSanitizedDump}"`
+  );
+  console.log("\n🔧 Alternative: Use with DBeaver or any PostgreSQL client");
+  console.log(
+    "The dump file is now free of ownership and privilege conflicts!"
   );
 } catch (error) {
   console.error("❌ Error:", error.message);
