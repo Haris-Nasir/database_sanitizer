@@ -7,7 +7,11 @@
     "dbeaver-dump": "node create-custom-format-dump.js",
     "postgres-dump": "node sanitize-postgres-dump.js",
     "db-migrate": "node db-dump-restore.js",
-    "anonymize": "node anonymize.js"
+    "anonymize": "node anonymize.js",
+    "scheduler": "node database-scheduler.js",
+    "scheduler:now": "node database-scheduler.js --now",
+    "scheduler:start": "node database-scheduler.js",
+    "scheduler:stop": "pkill -f database-scheduler.js"
   },
   "repository": {
     "type": "git",
@@ -23,6 +27,7 @@
   "type": "module",
   "dependencies": {
     "@faker-js/faker": "^10.0.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "node-cron": "^4.2.1"
   }
 }
